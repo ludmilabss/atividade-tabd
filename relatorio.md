@@ -1,7 +1,7 @@
 # Relatório de Implementação do Processo ETL  
 **Disciplina:** Tópicos Avançados em Banco de Dados  
 **Projeto:** Data Warehouse de Vendas – Global Retail  
-**Equipe:** [Preencher nomes dos integrantes]
+**Equipe:** Divaldo Verçosa e Ludmila Barbosa
 
 ---
 
