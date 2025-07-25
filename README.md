@@ -7,97 +7,88 @@
 
 ## 1. Descrição do Projeto
 
-Este projeto implementa um processo completo de ETL (Extração, Transformação e Carga) para alimentar um Data Warehouse (DW) de vendas da Global Retail. O objetivo é migrar dados de um sistema transacional (OLTP) com diversas inconsistências para um ambiente analítico (OLAP), garantindo integridade, padronização e qualidade dos dados.
+Este projeto implementa um processo completo de **ETL (Extração, Transformação e Carga)** para alimentar um Data Warehouse (DW) de vendas para a empresa fictícia "Global Retail". O objetivo é migrar dados de um sistema transacional de origem (OLTP), que contém diversas inconsistências, para um ambiente analítico robusto (OLAP), garantindo a integridade, padronização e qualidade dos dados para futuras análises de negócio.
+
+A solução foi desenvolvida utilizando **SQL** para o processo de ETL e **Docker** para orquestrar o ambiente do banco de dados MySQL, garantindo total portabilidade e reprodutibilidade do projeto.
 
 ---
 
 ## 2. Estrutura do Projeto
 
-- **docker-compose.yml:** Orquestração do ambiente de banco de dados.
-- **script_crm.sql:** Criação do banco de dados de origem (OLTP) e suas tabelas.
-- **dados_completos_padronizado.sql:** População do banco OLTP com dados reais e inconsistentes.
-- **script_final.sql:** Criação do Data Warehouse (DW) e implementação do processo ETL (extração, transformação e carga dos dados).
+- **`docker-compose.yml`**: Ficheiro de configuração do Docker para iniciar o container do serviço MySQL.
+- **`script_crm.sql`**: Script SQL para criar a estrutura de tabelas do banco de dados de origem (`crm`).
+- **`dados_completos_padronizado.sql`**: Script de inserção dos dados brutos e inconsistentes no banco `crm`.
+- **`script_final.sql`**: Script SQL completo que:
+    1.  Cria a estrutura do Data Warehouse (`dw_vendas`).
+    2.  Executa todo o processo de ETL para limpar, transformar e carregar os dados no DW.
 
 ---
 
-## 3. Principais Desafios e Tratamento de Inconsistências
+## 3. Principais Desafios de ETL e Soluções Implementadas
 
-Durante a implementação do ETL, foram identificados e tratados os seguintes problemas de qualidade dos dados:
+Durante a implementação, foram identificados e tratados os seguintes problemas de qualidade dos dados:
 
-### **a) Datas em Formatos Inválidos**
-- **Problema:** Datas em formatos diferentes ou inválidos (ex: '2023-12-01', '01/12/2023', valores HEX).
-- **Solução:**  
-  - Utilização de expressões regulares (RLIKE) para filtrar apenas datas válidas.
-  - Conversão de formatos diferentes usando `STR_TO_DATE`.
-  - Valores HEX específicos tratados como NULL.
+#### a) Datas Inválidas e Formatos Múltiplos
+- **Problema:** As tabelas de origem continham datas em múltiplos formatos (ex: `AAAA-MM-DD`, `DD/MM/AAAA`), valores textuais como `"N/A"`, e o texto `"Data Inválida"`, que por sua vez continha caracteres corrompidos (encoding).
+- **Solução:**
+  - Foi implementado um filtro com expressões regulares (`RLIKE`) para validar e processar apenas as datas em formatos esperados.
+  - Para o caso específico da "Data Inválida" corrompida, a solução final utilizou a função `HEX()` para identificar o padrão hexadecimal exato do dado problemático, criando uma regra de exclusão à prova de falhas.
 
-### **b) Valores Nulos e Não Informados**
-- **Problema:** Campos como nome de produto, país de origem, tipo de desconto, etc., com valores nulos.
-- **Solução:**  
-  - Uso de `COALESCE` para substituir nulos por valores padrão como 'Não Informado' ou 'N/A'.
+#### b) Valores Nulos (NULL)
+- **Problema:** Campos críticos para a análise, como `nome_produto` e `tipo_desconto`, continham valores nulos.
+- **Solução:** A função `COALESCE` foi utilizada para substituir os valores `NULL` por um padrão definido (ex: 'Não Informado' ou 'N/A'), garantindo que todos os campos tenham um valor.
 
-### **c) Padronização de Gênero**
-- **Problema:** Gênero informado como 'M', 'F' ou outros valores.
-- **Solução:**  
-  - Uso de `CASE` para padronizar para 'Masculino', 'Feminino' ou 'Outro'.
+#### c) Padronização de Dados Categóricos
+- **Problema:** A coluna `genero` utilizava os caracteres 'M' e 'F'.
+- **Solução:** Uma estrutura `CASE ... WHEN` foi aplicada durante a carga para transformar os valores em 'Masculino' e 'Feminino', tornando os dados mais legíveis para os relatórios finais.
 
-### **d) Chaves Estrangeiras e Integridade Referencial**
-- **Problema:** Possibilidade de registros órfãos ou inconsistentes.
-- **Solução:**  
-  - Carga das tabelas de dimensão antes da tabela fato.
-  - Uso de joins e filtros para garantir apenas registros válidos.
-
-### **e) Quantidade Vendida Inválida**
-- **Problema:** Vendas com quantidade menor ou igual a zero.
-- **Solução:**  
-  - Filtro explícito no ETL para ignorar essas vendas.
+#### d) Vendas com Quantidade Negativa
+- **Problema:** A tabela `item_vendas` continha registos com quantidade vendida negativa, provavelmente representando estornos ou devoluções.
+- **Solução:** Um filtro `WHERE qtd_vendida > 0` foi adicionado na carga da tabela de fatos para garantir que apenas as vendas efetivas fossem consideradas nas métricas.
 
 ---
 
-## 4. Descrição do Fluxo de Trabalho do ETL
+## 4. Instruções para Execução do Projeto
 
-1. **Preparação do Ambiente**
-   - Subida do banco de dados via Docker.
-   - Execução dos scripts de criação e carga do banco OLTP.
+Para recriar e executar este projeto, siga os passos abaixo.
 
-2. **Criação do Data Warehouse**
-   - Execução do script de criação das tabelas de dimensões e fatos no DW.
+**Pré-requisitos:**
+- Docker e Docker Compose instalados na sua máquina.
 
-3. **Processo ETL**
-   - **Extração:** Leitura dos dados das tabelas do OLTP.
-   - **Transformação:**  
-     - Limpeza e padronização dos dados conforme descrito acima.
-     - Enriquecimento dos dados via joins entre tabelas.
-   - **Carga:**  
-     - Inserção dos dados tratados nas tabelas de dimensão.
-     - Inserção dos dados na tabela fato, utilizando as chaves surrogadas das dimensões.
+**Passos:**
 
----
+1.  **Clone este repositório:**
+    ```bash
+    git clone [https://github.com/ludmilabss/atividade-tabd.git](https://github.com/ludmilabss/atividade-tabd.git)
+    cd atividade-tabd
+    ```
 
-## 5. Resumo das Tabelas Criadas
+2.  **Inicie o container do MySQL:**
+    Este comando irá baixar a imagem do MySQL e iniciar o serviço em segundo plano.
+    ```bash
+    docker-compose up -d
+    ```
 
-- **Dimensões:**  
-  - DimTempo, DimLoja, DimCliente, DimVendedor, DimPromocao, DimProduto
-- **Fato:**  
-  - FatoVendas
+3.  **Aguarde o MySQL ficar pronto:**
+    É crucial esperar alguns segundos para o banco de dados inicializar completamente. Verifique os logs com o comando abaixo e aguarde até ver a mensagem `ready for connections`. Depois, pode sair com `Ctrl+C`.
+    ```bash
+    docker logs -f mysql_db_tabd
+    ```
 
----
+4.  **Execute a carga dos dados de origem (OLTP):**
+    Estes comandos criam e populam o banco `crm` com os dados brutos.
+    ```bash
+    # Cria a estrutura do crm
+    docker exec -i mysql_db_tabd mysql -uroot -proot crm < script_crm.sql
 
-## 6. Considerações Finais
+    # Insere os dados brutos no crm
+    docker exec -i mysql_db_tabd mysql -uroot -proot crm < dados_completos_padronizado.sql
+    ```
 
-O processo ETL foi implementado inteiramente em SQL, garantindo robustez e clareza no tratamento das inconsistências dos dados. O uso de Docker facilita a replicação do ambiente. Todos os scripts necessários para a criação, carga e transformação dos dados estão presentes no repositório.
+5.  **Execute o script final de criação do DW e ETL:**
+    Este único script irá criar o DW `dw_vendas`, limpar, transformar e carregar todos os dados.
+    ```bash
+    docker exec -i mysql_db_tabd mysql -uroot -proot < script_final.sql
+    ```
 
----
-
-## 7. Instruções para Execução
-
-1. Suba o ambiente com Docker Compose:
-   ```bash
-   docker-compose up -d
-   ```
-2. Execute os scripts na seguinte ordem:
-   1. `script_crm.sql` (criação do OLTP)
-   2. `dados_completos_padronizado.sql` (população do OLTP)
-   3. `script_final.sql` (criação do DW e ETL)
-
----
+Ao final deste último passo, o seu Data Warehouse estará pronto para ser consultado.
